@@ -1,0 +1,64 @@
+_schema-version: '3.1'
+ID: cap-soap-consuming
+version: 1.0.0
+description: "A simple CAP project."
+parameters:
+  enable-parallel-deployments: true
+build-parameters:
+  before-all:
+    - builder: custom
+      commands:
+        - npx -p @sap/cds-dk cds build --production
+modules:
+  - name: cap-soap-consuming-srv
+    type: nodejs
+    path: gen/srv
+    parameters:
+      buildpack: nodejs_buildpack
+    build-parameters:
+      builder: npm-ci
+    provides:
+      - name: srv-api # required by consumers of CAP services (e.g. approuter)
+        properties:
+          srv-url: ${default-url}
+    requires:
+      - name: cap-soap-consuming-auth
+      - name: cap-soap-consuming-db
+      - name: cap-soap-consuming-dest
+
+  - name: cap-soap-consuming-db-deployer
+    type: hdb
+    path: gen/db
+    parameters:
+      buildpack: nodejs_buildpack
+    requires:
+      - name: cap-soap-consuming-db
+
+resources:
+  - name: cap-soap-consuming-auth
+    type: org.cloudfoundry.managed-service
+    parameters:
+      service: xsuaa
+      service-plan: application
+      path: ./xs-security.json
+      config:
+        xsappname: cap-soap-consuming-${org}-${space}
+        tenant-mode: dedicated
+  - name: cap-soap-consuming-db
+    type: com.sap.xs.hdi-container
+    parameters:
+      service: hana
+      service-plan: hdi-shared
+  - name: cap-soap-consuming-dest
+    type: org.cloudfoundry.managed-service
+    parameters:
+      config:
+        HTML5Runtime_enabled: false
+        init_data:
+          instance:
+            destinations:
+            existing_destinations_policy: update
+        version: 1.0.0
+      service: destination
+      service-name: cap-soap-consuming-dest
+      service-plan: lite
